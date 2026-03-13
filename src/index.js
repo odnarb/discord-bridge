@@ -282,9 +282,12 @@ async function createCodexReply(messageText, previousResponseId = null, progress
     }, 400);
   };
 
-  const timeout = setTimeout(() => {
-    controller.abort();
-  }, config.codexTimeoutMs);
+  const timeout =
+    config.codexTimeoutMs > 0
+      ? setTimeout(() => {
+          controller.abort();
+        }, config.codexTimeoutMs)
+      : null;
 
   try {
     const thread = previousResponseId
@@ -354,7 +357,9 @@ async function createCodexReply(messageText, previousResponseId = null, progress
     }
     throw error;
   } finally {
-    clearTimeout(timeout);
+    if (timeout) {
+      clearTimeout(timeout);
+    }
   }
 }
 
@@ -378,6 +383,7 @@ async function buildReply(message) {
       `Codex model: ${config.codexModel}`,
       `Codex network access: ${config.codexNetworkAccessEnabled ? "enabled" : "disabled"}`,
       `Codex SDK source: ${describeCodexSdkSource()}`,
+      `Timeout ms: ${config.codexTimeoutMs || 0}`,
     ].join("\n");
   }
 
