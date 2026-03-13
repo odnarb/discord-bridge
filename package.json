@@ -3,6 +3,7 @@
   "private": true,
   "version": "0.1.0",
   "description": "Minimal Discord DM bridge with Codex or OpenAI-backed replies.",
+  "author": "Brandon Chambers",
   "license": "MIT",
   "type": "module",
   "engines": {
