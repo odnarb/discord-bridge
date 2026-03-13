@@ -1,26 +1,47 @@
 # Discord Bridge
 
-Minimal Discord DM bridge for a single authorized operator.
+Minimal Discord DM bridge for a small trusted operator set.
 
-## What It Does
+## Overview
 
-- connects to the Discord gateway with a bot token
-- accepts direct messages only
-- filters messages by allowed user ID
-- logs inbound and outbound messages to `runtime/messages.jsonl`
-- replies with:
-  - a built-in status response
-  - a Codex SDK response when the backend is set to `codex`
-  - an OpenAI-backed response when the backend is set to `openai`
-- when using the Codex backend, it can stream SDK response events into a live DM status message
+- Connects to the Discord gateway with a bot token
+- Accepts direct messages only
+- Restricts access to an allowlist of Discord user IDs
+- Logs local runtime activity to `runtime/messages.jsonl`
+- Replies with built-in status output, Codex-backed output, or OpenAI-backed output
+- Can stream Codex progress into a live DM status message while work is running
 
-## Publish Hygiene
+## Intended Use
 
-- runtime data stays local and should not be committed
-- secrets stay in env files and should not be committed
-- no user-specific filesystem paths are required by default
+- Personal operator bot
+- Small internal automation bridge
+- Private support or operations assistant
 
-## Environment
+This project is intentionally narrow:
+
+- DM only
+- No slash commands
+- No multi-tenant auth model
+- No dashboard or hosted control plane
+
+## Requirements
+
+- Node.js 22 or newer
+- A Discord bot token and application ID
+- At least one allowed Discord user ID
+- An OpenAI API key if you want OpenAI-backed replies
+
+## Quick Start
+
+```bash
+npm install
+cp .env.example .env
+npm start
+```
+
+Fill in `.env` with real values before starting the bridge.
+
+## Configuration
 
 By default, the bridge looks for env files in this order:
 
@@ -35,10 +56,12 @@ Required:
 - `DISCORD_BOT_TOKEN`
 - `DISCORD_APPLICATION_ID`
 - `DISCORD_ALLOWED_USER_IDS`
+  Comma-separated list of Discord user IDs allowed to DM the bot.
 
 Optional:
 
 - `DISCORD_REPLY_BACKEND`
+  `codex` or `openai`
 - `CODEX_BIN`
 - `CODEX_CWD`
 - `CODEX_MODEL`
@@ -50,13 +73,6 @@ Optional:
 - `OPENAI_API_KEY`
 - `OPENAI_MODEL`
 - `OPENAI_SYSTEM_PROMPT`
-
-## Run
-
-```bash
-npm install
-npm start
-```
 
 If `@openai/codex-sdk` is not installed in the project, set `CODEX_SDK_MODULE_PATH` to a valid module file instead.
 
@@ -76,6 +92,12 @@ Any other DM:
 - uses `@openai/codex-sdk` when `DISCORD_REPLY_BACKEND=codex`
 - uses the OpenAI reply path when `DISCORD_REPLY_BACKEND=openai`
 - otherwise returns a bridge-live acknowledgement
+
+## Security Notes
+
+- Do not commit `.env`, `.env.local`, or runtime logs
+- Treat `runtime/messages.jsonl` and `runtime/state.json` as sensitive local data
+- Keep `DISCORD_ALLOWED_USER_IDS` restricted to trusted operators
 
 ## Codex SDK Stream
 
