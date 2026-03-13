@@ -112,6 +112,8 @@ export function loadConfig(projectRoot) {
         "Do not reveal private identities, addresses, or other sensitive details.",
         "Help with software, automation, product strategy, social strategy, and operations.",
       ].join(" "),
+    socialDeskRoot:
+      merged.SOCIAL_DESK_ROOT || path.resolve(projectRoot, "..", "social-desk"),
   };
 
   if (!config.discordBotToken) {

@@ -62,6 +62,8 @@ Optional:
 
 - `DISCORD_REPLY_BACKEND`
   `codex` or `openai`
+- `SOCIAL_DESK_ROOT`
+  Path to the `social-desk` repo. Defaults to `../social-desk`.
 - `CODEX_BIN`
 - `CODEX_CWD`
 - `CODEX_MODEL`
@@ -86,6 +88,12 @@ Copy `.env.example` to `.env` or `.env.local` and fill in real values.
 
 - `ping`: returns `pong`
 - `status`: returns bridge status and whether AI replies are enabled
+- `x queue`: shows queue counts and top pending items from `social-desk`
+- `x usage`: shows `social-desk` budget and queue status
+- `x approve <item-id>`: marks an item approved
+- `x reject <item-id>`: marks an item denied
+- `x hold <item-id>`: marks an item hold
+- `x revise <item-id> <instruction>`: appends a revision note and resets the item to pending
 
 Any other DM:
 

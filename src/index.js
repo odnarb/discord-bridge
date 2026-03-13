@@ -3,6 +3,7 @@ import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { loadConfig } from "./env.js";
 import { createOpenAiReply, hasOpenAi } from "./openai.js";
+import { handleSocialDeskCommand } from "./socialDesk.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -384,7 +385,13 @@ async function buildReply(message) {
       `Codex network access: ${config.codexNetworkAccessEnabled ? "enabled" : "disabled"}`,
       `Codex SDK source: ${describeCodexSdkSource()}`,
       `Timeout ms: ${config.codexTimeoutMs || 0}`,
+      `social-desk root: ${config.socialDeskRoot}`,
     ].join("\n");
+  }
+
+  const socialDeskReply = handleSocialDeskCommand(content, config);
+  if (socialDeskReply) {
+    return socialDeskReply;
   }
 
   if (hasCodexBackend()) {
