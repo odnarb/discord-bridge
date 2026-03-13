@@ -45,6 +45,7 @@ Optional:
 - `CODEX_TIMEOUT_MS`
 - `CODEX_STREAM_JSON`
 - `CODEX_REASONING_EFFORT`
+- `CODEX_NETWORK_ACCESS_ENABLED`
 - `CODEX_SDK_MODULE_PATH`
 - `OPENAI_API_KEY`
 - `OPENAI_MODEL`
@@ -58,6 +59,8 @@ npm start
 ```
 
 If `@openai/codex-sdk` is not installed in the project, set `CODEX_SDK_MODULE_PATH` to a valid module file instead.
+
+`CODEX_NETWORK_ACCESS_ENABLED` defaults to `true` for Codex-backed replies.
 
 ## Example Env
 

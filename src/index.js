@@ -291,6 +291,7 @@ async function createCodexReply(messageText, previousResponseId = null, progress
       ? client.resumeThread(previousResponseId, {
           model: config.codexModel,
           sandboxMode: "workspace-write",
+          networkAccessEnabled: config.codexNetworkAccessEnabled,
           workingDirectory: config.codexCwd,
           skipGitRepoCheck: true,
           modelReasoningEffort: config.codexReasoningEffort,
@@ -298,6 +299,7 @@ async function createCodexReply(messageText, previousResponseId = null, progress
       : client.startThread({
           model: config.codexModel,
           sandboxMode: "workspace-write",
+          networkAccessEnabled: config.codexNetworkAccessEnabled,
           workingDirectory: config.codexCwd,
           skipGitRepoCheck: true,
           modelReasoningEffort: config.codexReasoningEffort,
@@ -374,6 +376,7 @@ async function buildReply(message) {
       `Reply backend: ${config.replyBackend}`,
       `OpenAI API key configured: ${hasOpenAi(config) ? "yes" : "no"}`,
       `Codex model: ${config.codexModel}`,
+      `Codex network access: ${config.codexNetworkAccessEnabled ? "enabled" : "disabled"}`,
       `Codex SDK source: ${describeCodexSdkSource()}`,
     ].join("\n");
   }
@@ -661,6 +664,7 @@ appendLog({
   envSource: describeEnvSource(config.envPath),
   allowedUsers: config.allowedUserIds.length,
   replyBackend: config.replyBackend,
+  codexNetworkAccessEnabled: config.codexNetworkAccessEnabled,
   openAiConfigured: hasOpenAi(config),
 });
 

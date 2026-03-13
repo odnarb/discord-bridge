@@ -97,6 +97,10 @@ export function loadConfig(projectRoot) {
     codexTimeoutMs: Number(merged.CODEX_TIMEOUT_MS || 180000),
     codexStreamJson: parseBoolean(merged.CODEX_STREAM_JSON, true),
     codexReasoningEffort: merged.CODEX_REASONING_EFFORT || "low",
+    codexNetworkAccessEnabled: parseBoolean(
+      merged.CODEX_NETWORK_ACCESS_ENABLED,
+      true,
+    ),
     codexSdkModulePath: merged.CODEX_SDK_MODULE_PATH || "",
     openAiApiKey: merged.OPENAI_API_KEY || "",
     openAiModel: merged.OPENAI_MODEL || DEFAULT_MODEL,
