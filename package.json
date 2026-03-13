@@ -1,0 +1,17 @@
+{
+  "name": "discord-bridge",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Minimal Discord DM bridge with Codex or OpenAI-backed replies.",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "start": "node src/index.js",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "@openai/codex-sdk": "0.114.0"
+  }
+}
