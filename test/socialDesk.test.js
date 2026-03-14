@@ -90,6 +90,21 @@ test("x queue summarizes the pending queue", async () => {
   assert.match(reply, /citizenOS/);
 });
 
+test("x cmds returns the social-desk command list", async () => {
+  const root = makeSocialDeskRoot();
+
+  const reply = await handleSocialDeskCommand(
+    "x cmds",
+    { socialDeskRoot: root },
+    "discord:123",
+  );
+
+  assert.match(reply, /social-desk commands:/);
+  assert.match(reply, /`x queue`/);
+  assert.match(reply, /`x usage`/);
+  assert.match(reply, /`x post <item-id>`/);
+});
+
 test("x show prints queue item detail", async () => {
   const root = makeSocialDeskRoot();
 

@@ -94,6 +94,7 @@ Copy `.env.example` to `.env` or `.env.local` and fill in real values.
 
 - `ping`: returns `pong`
 - `status`: returns bridge status and whether AI replies are enabled
+- `x cmds`: shows the built-in `social-desk` bridge commands
 - `x queue`: shows queue counts and top pending items from `social-desk`
 - `x usage`: shows `social-desk` budget and queue status
 - `x approve <item-id>`: marks an item approved

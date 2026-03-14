@@ -11,6 +11,18 @@ function clip(text, maxLength = 160) {
 }
 
 const moduleCache = new Map();
+const SOCIAL_DESK_COMMANDS = [
+  "social-desk commands:",
+  "`x cmds`",
+  "`x queue`",
+  "`x usage`",
+  "`x show <item-id>`",
+  "`x approve <item-id>`",
+  "`x reject <item-id>`",
+  "`x hold <item-id>`",
+  "`x revise <item-id> <instruction>`",
+  "`x post <item-id>`",
+];
 
 async function getSocialDeskModule(projectRoot) {
   const modulePath = path.join(projectRoot, "src", "queueActions.js");
@@ -90,18 +102,8 @@ export async function handleSocialDeskCommand(content, config, actor = "discord"
   const itemId = match?.[2] || "";
   const tail = (match?.[3] || "").trim();
 
-  if (!action || action === "help") {
-    return [
-      "social-desk commands:",
-      "`x queue`",
-      "`x usage`",
-      "`x show <item-id>`",
-      "`x approve <item-id>`",
-      "`x reject <item-id>`",
-      "`x hold <item-id>`",
-      "`x revise <item-id> <instruction>`",
-      "`x post <item-id>`",
-    ].join("\n");
+  if (!action || action === "help" || action === "cmds") {
+    return SOCIAL_DESK_COMMANDS.join("\n");
   }
 
   if (action === "queue") {
