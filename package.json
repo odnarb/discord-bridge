@@ -10,6 +10,8 @@
     "node": ">=22"
   },
   "scripts": {
+    "dev": "node --watch src/index.js",
+    "emit:progress": "node scripts/emit-progress.js",
     "start": "node src/index.js",
     "test": "node --test"
   },

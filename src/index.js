@@ -3,6 +3,7 @@ import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { loadConfig } from "./env.js";
 import { createOpenAiReply, hasOpenAi } from "./openai.js";
+import { collectProgressNotifications } from "./progressNotify.js";
 import { handleSocialDeskCommand } from "./socialDesk.js";
 import { collectSocialDeskNotifications } from "./socialDeskNotify.js";
 
@@ -12,6 +13,7 @@ const projectRoot = path.resolve(__dirname, "..");
 const runtimeDir = path.join(projectRoot, "runtime");
 const messagesLogPath = path.join(runtimeDir, "messages.jsonl");
 const statePath = path.join(runtimeDir, "state.json");
+const progressStatePath = path.join(runtimeDir, "progress-state.json");
 
 const config = loadConfig(projectRoot);
 
@@ -19,11 +21,13 @@ let socket = null;
 let heartbeatTimer = null;
 let reconnectTimer = null;
 let socialDeskNotificationTimer = null;
+let progressNotificationTimer = null;
 let heartbeatIntervalMs = 0;
 let lastSequence = null;
 let sessionId = null;
 let botUserId = null;
 let socialDeskNotificationRunning = false;
+let progressNotificationRunning = false;
 const activeUsers = new Set();
 let codexClientPromise = null;
 
@@ -47,6 +51,22 @@ function loadState() {
 
 function saveState(state) {
   fs.writeFileSync(statePath, JSON.stringify(state, null, 2));
+}
+
+function loadProgressState() {
+  if (!fs.existsSync(progressStatePath)) {
+    return {};
+  }
+
+  try {
+    return JSON.parse(fs.readFileSync(progressStatePath, "utf8"));
+  } catch {
+    return {};
+  }
+}
+
+function saveProgressState(state) {
+  fs.writeFileSync(progressStatePath, JSON.stringify(state, null, 2));
 }
 
 function appendLog(entry) {
@@ -568,6 +588,43 @@ async function runSocialDeskNotifications() {
   }
 }
 
+async function runProgressNotifications() {
+  if (!config.progressNotifyEnabled || progressNotificationRunning) {
+    return;
+  }
+
+  progressNotificationRunning = true;
+
+  try {
+    const currentState = loadProgressState();
+    const { messages, nextState } = await collectProgressNotifications(
+      config,
+      currentState,
+      new Date(),
+    );
+
+    if (messages.length > 0) {
+      for (const userId of config.allowedUserIds) {
+        for (const message of messages) {
+          await sendDiscordDm(userId, message);
+        }
+      }
+    }
+
+    saveProgressState(nextState);
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    appendLog({
+      ts: new Date().toISOString(),
+      direction: "error",
+      scope: "progress-notify",
+      error: detail,
+    });
+  } finally {
+    progressNotificationRunning = false;
+  }
+}
+
 function startSocialDeskNotifications() {
   if (!config.socialDeskNotifyEnabled) {
     return;
@@ -577,6 +634,17 @@ function startSocialDeskNotifications() {
   socialDeskNotificationTimer = setInterval(() => {
     runSocialDeskNotifications().catch(() => {});
   }, config.socialDeskNotifyIntervalMs);
+}
+
+function startProgressNotifications() {
+  if (!config.progressNotifyEnabled) {
+    return;
+  }
+
+  runProgressNotifications().catch(() => {});
+  progressNotificationTimer = setInterval(() => {
+    runProgressNotifications().catch(() => {});
+  }, config.progressNotifyIntervalMs);
 }
 
 function clearGatewayTimers() {
@@ -595,6 +663,10 @@ function clearTimers() {
   if (socialDeskNotificationTimer) {
     clearInterval(socialDeskNotificationTimer);
     socialDeskNotificationTimer = null;
+  }
+  if (progressNotificationTimer) {
+    clearInterval(progressNotificationTimer);
+    progressNotificationTimer = null;
   }
 }
 
@@ -753,9 +825,12 @@ appendLog({
   replyBackend: config.replyBackend,
   codexNetworkAccessEnabled: config.codexNetworkAccessEnabled,
   openAiConfigured: hasOpenAi(config),
+  progressNotifyEnabled: config.progressNotifyEnabled,
+  progressNotifyLevels: config.progressNotifyLevels,
 });
 
 startSocialDeskNotifications();
+startProgressNotifications();
 connect().catch((error) => {
   console.error("Failed to start Discord bridge:", error);
   process.exitCode = 1;

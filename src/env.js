@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { defaultProgressEventsPath } from "./progressEvents.js";
 
 const DEFAULT_MODEL = "gpt-5.4";
 const DEFAULT_CODEX_MODEL = "gpt-5.4";
@@ -120,6 +121,19 @@ export function loadConfig(projectRoot) {
     ),
     socialDeskDailySummaryHourUtc:
       merged.SOCIAL_DESK_DAILY_SUMMARY_HOUR_UTC || "",
+    progressNotifyEnabled: parseBoolean(
+      merged.DISCORD_PROGRESS_NOTIFY_ENABLED,
+      true,
+    ),
+    progressNotifyIntervalMs: Number(
+      merged.DISCORD_PROGRESS_NOTIFY_INTERVAL_MS || 15 * 1000,
+    ),
+    progressNotifyLevels: splitCsv(
+      merged.DISCORD_PROGRESS_NOTIFY_LEVELS || "milestone,blocker,complete",
+    ),
+    progressEventsPath:
+      merged.DISCORD_PROGRESS_EVENTS_PATH ||
+      defaultProgressEventsPath(path.join(projectRoot, "runtime")),
   };
 
   if (!config.discordBotToken) {

@@ -10,6 +10,7 @@ Minimal Discord DM bridge for a small trusted operator set.
 - Logs local runtime activity to `runtime/messages.jsonl`
 - Replies with built-in status output, Codex-backed output, or OpenAI-backed output
 - Can stream Codex progress into a live DM status message while work is running
+- Can watch `runtime/progress-events.jsonl` and DM milestone/blocker/completion updates
 
 ## Intended Use
 
@@ -41,6 +42,12 @@ npm start
 
 Fill in `.env` with real values before starting the bridge.
 
+For local bridge development with auto-reload:
+
+```bash
+npm run dev
+```
+
 ## Configuration
 
 By default, the bridge looks for env files in this order:
@@ -70,6 +77,14 @@ Optional:
   Poll interval for `social-desk` notifications. Defaults to `300000`.
 - `SOCIAL_DESK_DAILY_SUMMARY_HOUR_UTC`
   Optional UTC hour (`0-23`) for a once-daily queue summary DM.
+- `DISCORD_PROGRESS_NOTIFY_ENABLED`
+  Enables polling of `runtime/progress-events.jsonl` for task updates.
+- `DISCORD_PROGRESS_NOTIFY_INTERVAL_MS`
+  Poll interval for progress-event notifications. Defaults to `15000`.
+- `DISCORD_PROGRESS_NOTIFY_LEVELS`
+  Comma-separated levels to DM. Defaults to `milestone,blocker,complete`.
+- `DISCORD_PROGRESS_EVENTS_PATH`
+  Optional override for the watched progress JSONL file.
 - `CODEX_BIN`
 - `CODEX_CWD`
 - `CODEX_MODEL`
@@ -136,3 +151,29 @@ When `SOCIAL_DESK_NOTIFY_ENABLED=true`, the bridge polls `social-desk` and sends
 - optional daily queue summaries when `SOCIAL_DESK_DAILY_SUMMARY_HOUR_UTC` is set
 
 This is meant to pair with `social-desk` queue regeneration, for example by running `npm run schedule:queue` in the `social-desk` repo.
+
+## Progress Event Notifications
+
+When `DISCORD_PROGRESS_NOTIFY_ENABLED=true`, the bridge polls `runtime/progress-events.jsonl` and DMs allowed users for selected levels such as:
+
+- `milestone`
+- `blocker`
+- `complete`
+
+Recommended event shape:
+
+- `taskId`
+- `threadId`
+- `project`
+- `scope`
+- `status`
+- `message`
+- `ts`
+- `level`
+- `meta`
+
+You can emit a test event locally with:
+
+```bash
+npm run emit:progress -- --project carapace --task steering --level milestone --status completed --message "Seeded local steering repo."
+```
