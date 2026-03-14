@@ -114,6 +114,12 @@ export function loadConfig(projectRoot) {
       ].join(" "),
     socialDeskRoot:
       merged.SOCIAL_DESK_ROOT || path.resolve(projectRoot, "..", "social-desk"),
+    socialDeskNotifyEnabled: parseBoolean(merged.SOCIAL_DESK_NOTIFY_ENABLED, false),
+    socialDeskNotifyIntervalMs: Number(
+      merged.SOCIAL_DESK_NOTIFY_INTERVAL_MS || 5 * 60 * 1000,
+    ),
+    socialDeskDailySummaryHourUtc:
+      merged.SOCIAL_DESK_DAILY_SUMMARY_HOUR_UTC || "",
   };
 
   if (!config.discordBotToken) {

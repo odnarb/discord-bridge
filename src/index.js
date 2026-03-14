@@ -4,6 +4,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { loadConfig } from "./env.js";
 import { createOpenAiReply, hasOpenAi } from "./openai.js";
 import { handleSocialDeskCommand } from "./socialDesk.js";
+import { collectSocialDeskNotifications } from "./socialDeskNotify.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -17,10 +18,12 @@ const config = loadConfig(projectRoot);
 let socket = null;
 let heartbeatTimer = null;
 let reconnectTimer = null;
+let socialDeskNotificationTimer = null;
 let heartbeatIntervalMs = 0;
 let lastSequence = null;
 let sessionId = null;
 let botUserId = null;
+let socialDeskNotificationRunning = false;
 const activeUsers = new Set();
 let codexClientPromise = null;
 
@@ -210,6 +213,15 @@ async function sendDiscordMessage(channelId, content) {
     });
   }
   return lastPayload;
+}
+
+async function sendDiscordDm(userId, content) {
+  const channel = await discordApi("/users/@me/channels", {
+    method: "POST",
+    body: JSON.stringify({ recipient_id: String(userId) }),
+  });
+
+  return sendDiscordMessage(channel.id, content);
 }
 
 async function editDiscordMessage(channelId, messageId, content) {
@@ -517,7 +529,57 @@ async function handleIncomingMessage(message) {
   }
 }
 
-function clearTimers() {
+async function runSocialDeskNotifications() {
+  if (!config.socialDeskNotifyEnabled || socialDeskNotificationRunning) {
+    return;
+  }
+
+  socialDeskNotificationRunning = true;
+
+  try {
+    const state = loadState();
+    const currentState = state.socialDeskNotifications || {};
+    const { messages, nextState } = await collectSocialDeskNotifications(
+      config,
+      currentState,
+      new Date(),
+    );
+
+    if (messages.length > 0) {
+      for (const userId of config.allowedUserIds) {
+        for (const message of messages) {
+          await sendDiscordDm(userId, message);
+        }
+      }
+    }
+
+    state.socialDeskNotifications = nextState;
+    saveState(state);
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    appendLog({
+      ts: new Date().toISOString(),
+      direction: "error",
+      scope: "social-desk-notify",
+      error: detail,
+    });
+  } finally {
+    socialDeskNotificationRunning = false;
+  }
+}
+
+function startSocialDeskNotifications() {
+  if (!config.socialDeskNotifyEnabled) {
+    return;
+  }
+
+  runSocialDeskNotifications().catch(() => {});
+  socialDeskNotificationTimer = setInterval(() => {
+    runSocialDeskNotifications().catch(() => {});
+  }, config.socialDeskNotifyIntervalMs);
+}
+
+function clearGatewayTimers() {
   if (heartbeatTimer) {
     clearInterval(heartbeatTimer);
     heartbeatTimer = null;
@@ -528,8 +590,16 @@ function clearTimers() {
   }
 }
 
+function clearTimers() {
+  clearGatewayTimers();
+  if (socialDeskNotificationTimer) {
+    clearInterval(socialDeskNotificationTimer);
+    socialDeskNotificationTimer = null;
+  }
+}
+
 function scheduleReconnect(delayMs = 5000) {
-  clearTimers();
+  clearGatewayTimers();
   reconnectTimer = setTimeout(() => {
     reconnectTimer = null;
     connect().catch((error) => {
@@ -632,7 +702,7 @@ async function onGatewayPayload(payload) {
 }
 
 async function connect() {
-  clearTimers();
+  clearGatewayTimers();
 
   const gatewayInfo = await discordApi("/gateway/bot");
   const gatewayUrl = `${gatewayInfo.url}?v=10&encoding=json`;
@@ -685,6 +755,7 @@ appendLog({
   openAiConfigured: hasOpenAi(config),
 });
 
+startSocialDeskNotifications();
 connect().catch((error) => {
   console.error("Failed to start Discord bridge:", error);
   process.exitCode = 1;

@@ -64,6 +64,12 @@ Optional:
   `codex` or `openai`
 - `SOCIAL_DESK_ROOT`
   Path to the `social-desk` repo. Defaults to `../social-desk`.
+- `SOCIAL_DESK_NOTIFY_ENABLED`
+  Enables periodic `social-desk` DM notifications to allowed operators.
+- `SOCIAL_DESK_NOTIFY_INTERVAL_MS`
+  Poll interval for `social-desk` notifications. Defaults to `300000`.
+- `SOCIAL_DESK_DAILY_SUMMARY_HOUR_UTC`
+  Optional UTC hour (`0-23`) for a once-daily queue summary DM.
 - `CODEX_BIN`
 - `CODEX_CWD`
 - `CODEX_MODEL`
@@ -120,3 +126,12 @@ It will:
 - send the final response as a normal Discord message
 
 Set `CODEX_STREAM_JSON=false` to disable the live progress stream.
+
+## social-desk Notifications
+
+When `SOCIAL_DESK_NOTIFY_ENABLED=true`, the bridge polls `social-desk` and sends DM alerts to every allowed user for:
+
+- newly pending queue items
+- optional daily queue summaries when `SOCIAL_DESK_DAILY_SUMMARY_HOUR_UTC` is set
+
+This is meant to pair with `social-desk` queue regeneration, for example by running `npm run schedule:queue` in the `social-desk` repo.
