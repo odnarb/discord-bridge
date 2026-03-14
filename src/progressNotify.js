@@ -28,9 +28,31 @@ function clip(text, maxLength = 240) {
   return `${value.slice(0, maxLength - 3)}...`;
 }
 
+function emojiForLevel(level) {
+  switch (String(level || "").toLowerCase()) {
+    case "complete":
+    case "completed":
+      return "✅";
+    case "blocker":
+    case "warning":
+      return "⚠️";
+    case "question":
+    case "approval":
+      return "❓";
+    case "failed":
+    case "error":
+      return "❌";
+    case "started":
+    case "milestone":
+    case "in_progress":
+    default:
+      return "🔄";
+  }
+}
+
 function formatProgressMessage(event) {
   return [
-    `${event.project || "unknown"} progress [${event.level || "milestone"}]`,
+    `${emojiForLevel(event.level)} ${event.project || "unknown"} progress [${event.level || "milestone"}]`,
     event.taskId ? `Task: ${event.taskId}` : null,
     event.scope ? `Scope: ${event.scope}` : null,
     event.status ? `Status: ${event.status}` : null,

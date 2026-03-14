@@ -159,6 +159,7 @@ When `DISCORD_PROGRESS_NOTIFY_ENABLED=true`, the bridge polls `runtime/progress-
 - `milestone`
 - `blocker`
 - `complete`
+- `question`
 
 Recommended event shape:
 
@@ -171,6 +172,14 @@ Recommended event shape:
 - `ts`
 - `level`
 - `meta`
+
+Emoji mapping:
+
+- `milestone` or `started`: `🔄`
+- `blocker` or `warning`: `⚠️`
+- `complete`: `✅`
+- `question` or `approval`: `❓`
+- `failed` or `error`: `❌`
 
 You can emit a test event locally with:
 

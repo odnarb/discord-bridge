@@ -53,9 +53,9 @@ test("collectProgressNotifications emits only configured levels and only once", 
   );
 
   assert.equal(first.messages.length, 2);
-  assert.match(first.messages[0], /carapace progress \[milestone\]/);
+  assert.match(first.messages[0], /🔄 carapace progress \[milestone\]/);
   assert.match(first.messages[0], /Seeded steering repo/);
-  assert.match(first.messages[1], /carapace progress \[blocker\]/);
+  assert.match(first.messages[1], /⚠️ carapace progress \[blocker\]/);
   assert.equal(first.nextState.processedLines, 3);
   assert.deepEqual(second.messages, []);
 });
@@ -83,5 +83,6 @@ test("collectProgressNotifications resets safely when the event file is truncate
   const first = await collectProgressNotifications(config, { processedLines: 10 });
 
   assert.equal(first.messages.length, 1);
+  assert.match(first.messages[0], /✅ carapace progress \[complete\]/);
   assert.equal(first.nextState.processedLines, 1);
 });
