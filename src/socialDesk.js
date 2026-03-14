@@ -44,7 +44,7 @@ async function getSocialDeskModule(projectRoot) {
 
 function formatQueueLine(item) {
   return [
-    `- ${item.id}`,
+    `- id: \`${item.id}\``,
     `[${item.reviewStatus}]`,
     item.topic,
     item.title,
@@ -116,6 +116,9 @@ export async function handleSocialDeskCommand(content, config, actor = "discord"
       "",
       summary.pendingItems.length > 0 ? "Top pending items:" : "No pending items.",
       ...summary.pendingItems.map(formatQueueLine),
+      ...(summary.pendingItems.length > 0
+        ? ["", "Use `x show <item-id>` or `x approve <item-id>` with the ids above."]
+        : []),
     ].join("\n");
   }
 

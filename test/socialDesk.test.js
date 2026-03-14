@@ -86,8 +86,9 @@ test("x queue summarizes the pending queue", async () => {
   );
 
   assert.match(reply, /Top pending items:/);
-  assert.match(reply, /reply-1/);
+  assert.match(reply, /id: `reply-1`/);
   assert.match(reply, /citizenOS/);
+  assert.match(reply, /x approve <item-id>/);
 });
 
 test("x cmds returns the social-desk command list", async () => {
