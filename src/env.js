@@ -60,10 +60,10 @@ export function findEnvFile(projectRoot) {
   const explicit = process.env.DISCORD_ENV_FILE;
   const candidates = [
     explicit,
-    path.join(projectRoot, ".env"),
     path.join(projectRoot, ".env.local"),
-    path.resolve(projectRoot, "..", "docs", ".env"),
+    path.join(projectRoot, ".env"),
     path.resolve(projectRoot, "..", "docs", ".env.local"),
+    path.resolve(projectRoot, "..", "docs", ".env"),
   ].filter(Boolean);
 
   return candidates.find((candidate) => fs.existsSync(candidate)) ?? null;

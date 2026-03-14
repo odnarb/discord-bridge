@@ -46,10 +46,10 @@ Fill in `.env` with real values before starting the bridge.
 By default, the bridge looks for env files in this order:
 
 1. `DISCORD_ENV_FILE` if set
-2. `./.env`
-3. `./.env.local`
-4. `../docs/.env`
-5. `../docs/.env.local`
+2. `./.env.local`
+3. `./.env`
+4. `../docs/.env.local`
+5. `../docs/.env`
 
 Required:
 
