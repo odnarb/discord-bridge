@@ -1,49 +1,7 @@
-import fs from "node:fs";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 
-const REVIEW_STATUSES = ["pending", "approved", "hold", "denied"];
-
-function queuePathFor(config) {
-  return path.join(config.socialDeskRoot, "runtime", "review-queue.json");
-}
-
-function readQueue(config) {
-  const queuePath = queuePathFor(config);
-  if (!fs.existsSync(queuePath)) {
-    throw new Error(
-      `social-desk queue not found at ${queuePath}. Run \`npm run generate:queue\` in /home/brandon/social-desk first.`,
-    );
-  }
-
-  try {
-    return JSON.parse(fs.readFileSync(queuePath, "utf8"));
-  } catch {
-    throw new Error(`Could not parse social-desk queue at ${queuePath}.`);
-  }
-}
-
-function writeQueue(config, queue) {
-  fs.writeFileSync(queuePathFor(config), JSON.stringify(queue, null, 2));
-}
-
-function normalizeQueue(queue) {
-  return {
-    ...queue,
-    queue: (queue.queue || []).map((item, index) => ({
-      notes: "",
-      reviewStatus: "pending",
-      reviewRank: index,
-      updatedAt: queue.generatedAt || new Date().toISOString(),
-      ...item,
-      reviewStatus: REVIEW_STATUSES.includes(item.reviewStatus)
-        ? item.reviewStatus
-        : "pending",
-      reviewRank: index,
-    })),
-  };
-}
-
-function clip(text, maxLength = 140) {
+function clip(text, maxLength = 160) {
   const value = String(text || "").trim();
   if (value.length <= maxLength) {
     return value;
@@ -52,56 +10,24 @@ function clip(text, maxLength = 140) {
   return `${value.slice(0, maxLength - 3).trim()}...`;
 }
 
-function titleFor(item) {
-  if (item.kind === "reply") {
-    return `@${item.sourcePost?.authorUsername || "unknown"}`;
+const moduleCache = new Map();
+
+async function getSocialDeskModule(projectRoot) {
+  const modulePath = path.join(projectRoot, "src", "queueActions.js");
+  if (!moduleCache.has(modulePath)) {
+    moduleCache.set(modulePath, import(pathToFileURL(modulePath).href));
   }
 
-  return `wall:${item.topic}`;
-}
-
-function sourceTextFor(item) {
-  if (item.kind === "reply") {
-    return item.sourcePost?.text || "";
+  try {
+    return await moduleCache.get(modulePath);
+  } catch (error) {
+    moduleCache.delete(modulePath);
+    throw new Error(
+      `Could not load social-desk queue module at ${modulePath}: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    );
   }
-
-  return item.draftText || "";
-}
-
-function countsFor(queue) {
-  const counts = Object.fromEntries(REVIEW_STATUSES.map((status) => [status, 0]));
-  for (const item of queue.queue) {
-    counts[item.reviewStatus] += 1;
-  }
-  return counts;
-}
-
-function findQueueItem(queue, itemId) {
-  return queue.queue.find((item) => item.id === itemId) || null;
-}
-
-function updateQueueItem(queue, itemId, patch) {
-  const normalized = normalizeQueue(queue);
-  const item = findQueueItem(normalized, itemId);
-
-  if (!item) {
-    throw new Error(`Queue item not found: ${itemId}`);
-  }
-
-  const nextQueue = {
-    ...normalized,
-    queue: normalized.queue.map((entry) =>
-      entry.id === itemId
-        ? {
-            ...entry,
-            ...patch,
-            updatedAt: new Date().toISOString(),
-          }
-        : entry,
-    ),
-  };
-
-  return normalizeQueue(nextQueue);
 }
 
 function formatQueueLine(item) {
@@ -109,18 +35,56 @@ function formatQueueLine(item) {
     `- ${item.id}`,
     `[${item.reviewStatus}]`,
     item.topic,
-    titleFor(item),
-    `:: ${clip(sourceTextFor(item), 90)}`,
+    item.title,
+    `:: ${item.preview}`,
   ].join(" ");
 }
 
-export function handleSocialDeskCommand(content, config) {
+function formatItemDetail(item) {
+  const lines = [
+    `${item.id} [${item.reviewStatus}]`,
+    `Topic: ${item.topic}`,
+    `Kind: ${item.kind}`,
+  ];
+
+  if (item.sourcePost?.authorUsername) {
+    lines.push(`Author: @${item.sourcePost.authorUsername}`);
+  }
+  if (item.sourcePost?.sourceUrl) {
+    lines.push(`Source URL: ${item.sourcePost.sourceUrl}`);
+  }
+  if (item.approvedAt) {
+    lines.push(`Approved: ${item.approvedAt} by ${item.approvedBy || "unknown"}`);
+  }
+  if (item.postedAt) {
+    lines.push(`Posted: ${item.postedAt} by ${item.postedBy || "unknown"}`);
+  }
+  if (item.postedReplyId) {
+    lines.push(`Posted tweet id: ${item.postedReplyId}`);
+  }
+  if (item.postError) {
+    lines.push(`Post error: ${item.postError}`);
+  }
+
+  lines.push("");
+  lines.push(`Draft: ${clip(item.draftText, 320)}`);
+  if (item.notes) {
+    lines.push(`Notes: ${clip(item.notes, 320)}`);
+  }
+  if (item.sourcePost?.text) {
+    lines.push(`Source: ${clip(item.sourcePost.text, 320)}`);
+  }
+
+  return lines.join("\n");
+}
+
+export async function handleSocialDeskCommand(content, config, actor = "discord") {
   const text = String(content || "").trim();
   if (!/^x\b/i.test(text)) {
     return null;
   }
 
-  const queue = normalizeQueue(readQueue(config));
+  const socialDesk = await getSocialDeskModule(config.socialDeskRoot);
   const match = text.match(/^x\s+(\w+)(?:\s+([^\s]+))?(?:\s+([\s\S]+))?$/i);
   const action = match?.[1]?.toLowerCase();
   const itemId = match?.[2] || "";
@@ -131,40 +95,39 @@ export function handleSocialDeskCommand(content, config) {
       "social-desk commands:",
       "`x queue`",
       "`x usage`",
+      "`x show <item-id>`",
       "`x approve <item-id>`",
       "`x reject <item-id>`",
       "`x hold <item-id>`",
       "`x revise <item-id> <instruction>`",
+      "`x post <item-id>`",
     ].join("\n");
   }
 
   if (action === "queue") {
-    const counts = countsFor(queue);
-    const pending = queue.queue
-      .filter((item) => item.reviewStatus === "pending")
-      .slice(0, 5);
-
+    const summary = socialDesk.getQueueSummary(config.socialDeskRoot);
     return [
-      `social-desk queue from ${queuePathFor(config)}`,
-      `Generated: ${queue.generatedAt || "unknown"}`,
-      `Items: ${queue.queue.length}`,
-      `Pending: ${counts.pending} | Approved: ${counts.approved} | Hold: ${counts.hold} | Denied: ${counts.denied}`,
+      `social-desk queue from ${summary.queuePath}`,
+      `Generated: ${summary.generatedAt || "unknown"}`,
+      `Items: ${summary.queueCount}`,
+      `Pending: ${summary.counts.pending} | Approved: ${summary.counts.approved} | Hold: ${summary.counts.hold} | Denied: ${summary.counts.denied}`,
       "",
-      pending.length > 0 ? "Top pending items:" : "No pending items.",
-      ...pending.map(formatQueueLine),
+      summary.pendingItems.length > 0 ? "Top pending items:" : "No pending items.",
+      ...summary.pendingItems.map(formatQueueLine),
     ].join("\n");
   }
 
   if (action === "usage") {
-    const counts = countsFor(queue);
+    const summary = socialDesk.getUsageSummary(config.socialDeskRoot);
     return [
       "social-desk usage snapshot:",
-      `Monthly budget: $${queue.budget?.monthlyBudgetUsd ?? "unknown"}`,
-      `Max reply approvals/day: ${queue.budget?.maxReplyApprovalsPerDay ?? "unknown"}`,
-      `Max wall posts/day: ${queue.budget?.maxWallPostsPerDay ?? "unknown"}`,
-      `Posting enabled: ${queue.postingEnabled ? "yes" : "no"}`,
-      `Items: ${queue.queue.length}`,
-      `Pending: ${counts.pending} | Approved: ${counts.approved} | Hold: ${counts.hold} | Denied: ${counts.denied}`,
+      `Monthly budget: $${summary.monthlyBudgetUsd ?? "unknown"}`,
+      `Max reply approvals/day: ${summary.maxReplyApprovalsPerDay ?? "unknown"}`,
+      `Max wall posts/day: ${summary.maxWallPostsPerDay ?? "unknown"}`,
+      `Posted replies today: ${summary.postedRepliesToday}`,
+      `Posted wall posts today: ${summary.postedWallsToday}`,
+      `Posting enabled: ${summary.postingEnabled ? "yes" : "no"}`,
+      `Items: ${summary.queueCount}`,
     ].join("\n");
   }
 
@@ -172,43 +135,47 @@ export function handleSocialDeskCommand(content, config) {
     throw new Error(`Missing item id for \`x ${action}\`.`);
   }
 
+  if (action === "show") {
+    const item = socialDesk.getQueueItemDetails(config.socialDeskRoot, itemId);
+    return formatItemDetail(item);
+  }
+
   if (action === "approve" || action === "reject" || action === "hold") {
-    const nextStatus =
+    const status =
       action === "approve" ? "approved" : action === "reject" ? "denied" : "hold";
-    const nextQueue = updateQueueItem(queue, itemId, { reviewStatus: nextStatus });
-    writeQueue(config, nextQueue);
-    const item = findQueueItem(nextQueue, itemId);
+    const item = socialDesk.reviewQueueItem(config.socialDeskRoot, itemId, {
+      status,
+      actor,
+    });
 
     return [
-      `Updated ${itemId} to ${nextStatus}.`,
-      formatQueueLine(item),
+      `Updated ${itemId} to ${status}.`,
+      formatQueueLine(socialDesk.summarizeQueueItem(item)),
     ].join("\n");
   }
 
   if (action === "revise") {
-    if (!tail) {
-      throw new Error("Missing revision instruction for `x revise`.");
-    }
-
-    const existing = findQueueItem(queue, itemId);
-    if (!existing) {
-      throw new Error(`Queue item not found: ${itemId}`);
-    }
-
-    const nextNotes = existing.notes
-      ? `${existing.notes}\nDiscord revise: ${tail}`
-      : `Discord revise: ${tail}`;
-    const nextQueue = updateQueueItem(queue, itemId, {
-      notes: nextNotes,
-      reviewStatus: "pending",
+    const item = socialDesk.reviseQueueItem(config.socialDeskRoot, itemId, {
+      actor,
+      instruction: tail,
     });
-    writeQueue(config, nextQueue);
-    const item = findQueueItem(nextQueue, itemId);
 
     return [
       `Revision note saved for ${itemId}.`,
-      formatQueueLine(item),
+      formatQueueLine(socialDesk.summarizeQueueItem(item)),
       `Notes appended: ${clip(tail, 160)}`,
+    ].join("\n");
+  }
+
+  if (action === "post") {
+    const item = await socialDesk.publishQueueItem(config.socialDeskRoot, itemId, {
+      actor,
+    });
+
+    return [
+      `Posted ${itemId}.`,
+      `Tweet id: ${item.postedReplyId || "unknown"}`,
+      `Posted at: ${item.postedAt}`,
     ].join("\n");
   }
 

@@ -389,7 +389,11 @@ async function buildReply(message) {
     ].join("\n");
   }
 
-  const socialDeskReply = handleSocialDeskCommand(content, config);
+  const socialDeskReply = await handleSocialDeskCommand(
+    content,
+    config,
+    `discord:${message.author.id}`,
+  );
   if (socialDeskReply) {
     return socialDeskReply;
   }

@@ -93,6 +93,8 @@ Copy `.env.example` to `.env` or `.env.local` and fill in real values.
 - `x approve <item-id>`: marks an item approved
 - `x reject <item-id>`: marks an item denied
 - `x hold <item-id>`: marks an item hold
+- `x show <item-id>`: shows item detail, notes, and audit state
+- `x post <item-id>`: publishes an approved item through `social-desk`
 - `x revise <item-id> <instruction>`: appends a revision note and resets the item to pending
 
 Any other DM:
