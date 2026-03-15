@@ -92,6 +92,7 @@ Optional:
 - `CODEX_STREAM_JSON`
 - `CODEX_REASONING_EFFORT`
 - `CODEX_NETWORK_ACCESS_ENABLED`
+- `CODEX_USE_OPENAI_API_KEY`
 - `CODEX_SDK_MODULE_PATH`
 - `OPENAI_API_KEY`
 - `OPENAI_MODEL`
@@ -100,6 +101,13 @@ Optional:
 If `@openai/codex-sdk` is not installed in the project, set `CODEX_SDK_MODULE_PATH` to a valid module file instead.
 
 `CODEX_NETWORK_ACCESS_ENABLED` defaults to `true` for Codex-backed replies.
+
+Auth behavior:
+
+- when `DISCORD_REPLY_BACKEND=codex`, the bridge uses local Codex/session auth by default
+- `OPENAI_API_KEY` is only injected into the Codex SDK when `CODEX_USE_OPENAI_API_KEY=true`
+- when `DISCORD_REPLY_BACKEND=openai`, replies always use the direct OpenAI API path
+- the `status` command reports the effective Codex auth source so quota failures are easier to interpret
 
 ## Example Env
 
@@ -134,6 +142,8 @@ Any other DM:
 ## Codex SDK Stream
 
 When `DISCORD_REPLY_BACKEND=codex`, the bridge uses `@openai/codex-sdk` and streams structured thread events.
+
+If you want the Codex SDK to authenticate with `OPENAI_API_KEY`, set `CODEX_USE_OPENAI_API_KEY=true`; otherwise the bridge relies on local/session-backed Codex auth.
 
 It will:
 

@@ -102,6 +102,10 @@ export function loadConfig(projectRoot) {
       merged.CODEX_NETWORK_ACCESS_ENABLED,
       true,
     ),
+    codexUseOpenAiApiKey: parseBoolean(
+      merged.CODEX_USE_OPENAI_API_KEY,
+      false,
+    ),
     codexSdkModulePath: merged.CODEX_SDK_MODULE_PATH || "",
     openAiApiKey: merged.OPENAI_API_KEY || "",
     openAiModel: merged.OPENAI_MODEL || DEFAULT_MODEL,

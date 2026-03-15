@@ -48,4 +48,24 @@ test("loadConfig loads required Discord values", () => {
   assert.equal(config.discordBotToken, "token");
   assert.equal(config.discordApplicationId, "app");
   assert.deepEqual(config.allowedUserIds, ["12345"]);
+  assert.equal(config.codexUseOpenAiApiKey, false);
+});
+
+test("loadConfig only opts Codex into OPENAI_API_KEY when explicitly enabled", () => {
+  const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), "discord-bridge-"));
+  fs.writeFileSync(
+    path.join(tmpRoot, ".env"),
+    [
+      "DISCORD_BOT_TOKEN=token",
+      "DISCORD_APPLICATION_ID=app",
+      "DISCORD_ALLOWED_USER_IDS=12345",
+      "OPENAI_API_KEY=test-key",
+      "CODEX_USE_OPENAI_API_KEY=true",
+    ].join("\n"),
+  );
+
+  const config = loadConfig(tmpRoot);
+
+  assert.equal(config.openAiApiKey, "test-key");
+  assert.equal(config.codexUseOpenAiApiKey, true);
 });

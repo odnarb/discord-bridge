@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { buildBackendStatusLines, formatBackendError } from "./backendDiagnostics.js";
 import { loadConfig } from "./env.js";
 import { createOpenAiReply, hasOpenAi } from "./openai.js";
 import { collectProgressNotifications } from "./progressNotify.js";
@@ -137,7 +138,7 @@ async function getCodexClient() {
           codexPathOverride: config.codexBin,
         };
 
-        if (config.openAiApiKey) {
+        if (config.codexUseOpenAiApiKey && config.openAiApiKey) {
           options.apiKey = config.openAiApiKey;
         }
 
@@ -411,12 +412,7 @@ async function buildReply(message) {
       "Discord bridge is live.",
       `Env source: ${describeEnvSource(config.envPath)}`,
       `Allowed users configured: ${config.allowedUserIds.length}`,
-      `Reply backend: ${config.replyBackend}`,
-      `OpenAI API key configured: ${hasOpenAi(config) ? "yes" : "no"}`,
-      `Codex model: ${config.codexModel}`,
-      `Codex network access: ${config.codexNetworkAccessEnabled ? "enabled" : "disabled"}`,
-      `Codex SDK source: ${describeCodexSdkSource()}`,
-      `Timeout ms: ${config.codexTimeoutMs || 0}`,
+      ...buildBackendStatusLines(config),
       `social-desk root: ${config.socialDeskRoot}`,
     ].join("\n");
   }
@@ -534,7 +530,7 @@ async function handleIncomingMessage(message) {
     const reply = await buildReply(message);
     await sendDiscordMessage(message.channel_id, reply);
   } catch (error) {
-    const detail = error instanceof Error ? error.message : String(error);
+    const detail = formatBackendError(config, error);
     appendLog({
       ts: new Date().toISOString(),
       direction: "error",
@@ -823,6 +819,7 @@ appendLog({
   envSource: describeEnvSource(config.envPath),
   allowedUsers: config.allowedUserIds.length,
   replyBackend: config.replyBackend,
+  codexUseOpenAiApiKey: config.codexUseOpenAiApiKey,
   codexNetworkAccessEnabled: config.codexNetworkAccessEnabled,
   openAiConfigured: hasOpenAi(config),
   progressNotifyEnabled: config.progressNotifyEnabled,
