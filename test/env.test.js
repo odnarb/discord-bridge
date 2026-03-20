@@ -5,6 +5,17 @@ import os from "node:os";
 import path from "node:path";
 import { findEnvFile, loadConfig, parseEnvFile, splitCsv } from "../src/env.js";
 
+function withIsolatedEnv(run) {
+  const previousEnv = process.env;
+  process.env = {};
+
+  try {
+    return run();
+  } finally {
+    process.env = previousEnv;
+  }
+}
+
 test("parseEnvFile parses key value pairs", () => {
   const parsed = parseEnvFile(`
 # comment
@@ -43,7 +54,7 @@ test("loadConfig loads required Discord values", () => {
     ].join("\n"),
   );
 
-  const config = loadConfig(tmpRoot);
+  const config = withIsolatedEnv(() => loadConfig(tmpRoot));
 
   assert.equal(config.discordBotToken, "token");
   assert.equal(config.discordApplicationId, "app");
@@ -64,7 +75,7 @@ test("loadConfig only opts Codex into OPENAI_API_KEY when explicitly enabled", (
     ].join("\n"),
   );
 
-  const config = loadConfig(tmpRoot);
+  const config = withIsolatedEnv(() => loadConfig(tmpRoot));
 
   assert.equal(config.openAiApiKey, "test-key");
   assert.equal(config.codexUseOpenAiApiKey, true);

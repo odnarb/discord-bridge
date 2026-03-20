@@ -48,6 +48,14 @@ For local bridge development with auto-reload:
 npm run dev
 ```
 
+This starts the bridge under PM2 in watch mode, but only watches `src/`.
+Generated files like `runtime/messages.jsonl` are excluded so the bridge does not restart on its own logs.
+Stop that dev process with:
+
+```bash
+npm run dev:stop
+```
+
 ## Configuration
 
 By default, the bridge looks for env files in this order:
@@ -88,7 +96,6 @@ Optional:
 - `CODEX_BIN`
 - `CODEX_CWD`
 - `CODEX_MODEL`
-- `CODEX_TIMEOUT_MS` (`0` disables the timeout)
 - `CODEX_STREAM_JSON`
 - `CODEX_REASONING_EFFORT`
 - `CODEX_NETWORK_ACCESS_ENABLED`
@@ -101,6 +108,15 @@ Optional:
 If `@openai/codex-sdk` is not installed in the project, set `CODEX_SDK_MODULE_PATH` to a valid module file instead.
 
 `CODEX_NETWORK_ACCESS_ENABLED` defaults to `true` for Codex-backed replies.
+
+Codex thread behavior:
+
+- Codex-backed Discord messages reuse the saved thread for the same user while the local day is unchanged
+- the saved per-user conversation state survives bridge restarts via `runtime/state.json`
+- a new local calendar day starts a fresh thread automatically
+- the bridge no longer applies a local Codex timeout cutoff
+
+OpenAI response chaining follows the same daily reset rule.
 
 Auth behavior:
 

@@ -2,6 +2,14 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { buildBackendStatusLines, formatBackendError } from "./backendDiagnostics.js";
+import {
+  createCodexConversation,
+  createEmptyState,
+  createOpenAiConversation,
+  getLocalDayKey,
+  getReusableConversation,
+  normalizeState,
+} from "./conversationState.js";
 import { loadConfig } from "./env.js";
 import { createOpenAiReply, hasOpenAi } from "./openai.js";
 import { collectProgressNotifications } from "./progressNotify.js";
@@ -31,6 +39,7 @@ let socialDeskNotificationRunning = false;
 let progressNotificationRunning = false;
 const activeUsers = new Set();
 let codexClientPromise = null;
+let stateUpdateQueue = Promise.resolve();
 
 ensureRuntime();
 
@@ -40,18 +49,30 @@ function ensureRuntime() {
 
 function loadState() {
   if (!fs.existsSync(statePath)) {
-    return { conversations: {} };
+    return createEmptyState();
   }
 
   try {
-    return JSON.parse(fs.readFileSync(statePath, "utf8"));
+    return normalizeState(JSON.parse(fs.readFileSync(statePath, "utf8")));
   } catch {
-    return { conversations: {} };
+    return createEmptyState();
   }
 }
 
 function saveState(state) {
   fs.writeFileSync(statePath, JSON.stringify(state, null, 2));
+}
+
+function updateState(mutator) {
+  const runUpdate = stateUpdateQueue.then(() => {
+    const state = loadState();
+    const nextState = mutator(state) || state;
+    saveState(nextState);
+    return nextState;
+  });
+
+  stateUpdateQueue = runUpdate.catch(() => { });
+  return runUpdate;
 }
 
 function loadProgressState() {
@@ -120,10 +141,10 @@ async function getCodexClient() {
     const modulePromise = config.codexSdkModulePath
       ? import(pathToFileURL(path.resolve(config.codexSdkModulePath)).href)
       : import("@openai/codex-sdk").catch(() => {
-          throw new Error(
-            "Could not load @openai/codex-sdk. Run npm install or set CODEX_SDK_MODULE_PATH.",
-          );
-        });
+        throw new Error(
+          "Could not load @openai/codex-sdk. Run npm install or set CODEX_SDK_MODULE_PATH.",
+        );
+      });
 
     codexClientPromise = modulePromise
       .then((module) => {
@@ -272,15 +293,14 @@ function hasOpenAiBackend() {
   return config.replyBackend === "openai" && hasOpenAi(config);
 }
 
-async function createCodexReply(messageText, previousResponseId = null, progress = null) {
+async function createCodexReply(messageText, progress = null, existingThreadId = null) {
   const client = await getCodexClient();
-  const controller = new AbortController();
   const streamLines = [];
   let reasoningText = "";
   let outputText = "";
   let lastProgressText = "";
   let progressScheduled = false;
-  let threadId = previousResponseId;
+  let threadId = null;
 
   const flushProgress = async () => {
     progressScheduled = false;
@@ -289,8 +309,6 @@ async function createCodexReply(messageText, previousResponseId = null, progress
     }
 
     const body = [
-      "Codex is working.",
-      "",
       reasoningText ? `Reasoning:\n\`\`\`text\n${clip(reasoningText, 1200)}\n\`\`\`` : null,
       outputText ? `Draft reply:\n\`\`\`text\n${clip(outputText, 1200)}\n\`\`\`` : null,
       streamLines.length > 0
@@ -312,42 +330,28 @@ async function createCodexReply(messageText, previousResponseId = null, progress
     }
     progressScheduled = true;
     setTimeout(() => {
-      flushProgress().catch(() => {});
+      flushProgress().catch(() => { });
     }, 400);
   };
 
-  const timeout =
-    config.codexTimeoutMs > 0
-      ? setTimeout(() => {
-          controller.abort();
-        }, config.codexTimeoutMs)
-      : null;
-
   try {
-    const thread = previousResponseId
-      ? client.resumeThread(previousResponseId, {
-          model: config.codexModel,
-          sandboxMode: "workspace-write",
-          networkAccessEnabled: config.codexNetworkAccessEnabled,
-          workingDirectory: config.codexCwd,
-          skipGitRepoCheck: true,
-          modelReasoningEffort: config.codexReasoningEffort,
-        })
-      : client.startThread({
-          model: config.codexModel,
-          sandboxMode: "workspace-write",
-          networkAccessEnabled: config.codexNetworkAccessEnabled,
-          workingDirectory: config.codexCwd,
-          skipGitRepoCheck: true,
-          modelReasoningEffort: config.codexReasoningEffort,
-        });
+    const threadOptions = {
+      model: config.codexModel,
+      sandboxMode: "workspace-write",
+      networkAccessEnabled: config.codexNetworkAccessEnabled,
+      workingDirectory: config.codexCwd,
+      skipGitRepoCheck: true,
+      modelReasoningEffort: config.codexReasoningEffort,
+    };
+    const thread = existingThreadId
+      ? client.resumeThread(existingThreadId, threadOptions)
+      : client.startThread(threadOptions);
 
     const { events } = await thread.runStreamed(
       [
         { type: "text", text: config.openAiSystemPrompt },
         { type: "text", text: messageText },
       ],
-      { signal: controller.signal },
     );
 
     for await (const event of events) {
@@ -384,16 +388,7 @@ async function createCodexReply(messageText, previousResponseId = null, progress
       text: outputText.trim() || "No text response returned.",
     };
   } catch (error) {
-    if (controller.signal.aborted) {
-      throw new Error(
-        `Codex SDK request timed out after ${config.codexTimeoutMs}ms.`,
-      );
-    }
     throw error;
-  } finally {
-    if (timeout) {
-      clearTimeout(timeout);
-    }
   }
 }
 
@@ -427,9 +422,6 @@ async function buildReply(message) {
   }
 
   if (hasCodexBackend()) {
-    const state = loadState();
-    const previousResponseId =
-      state.conversations?.[message.author.id]?.previousResponseId || null;
     let progressMessageId = null;
     let pendingProgress = Promise.resolve();
 
@@ -446,17 +438,29 @@ async function buildReply(message) {
       return pendingProgress;
     };
 
+    const state = loadState();
+    const currentDay = getLocalDayKey();
+    const existingConversation = getReusableConversation(
+      state,
+      message.author.id,
+      "codex",
+      currentDay,
+    );
+    const previousThreadId = existingConversation?.threadId || null;
+
     const result = await createCodexReply(
       content,
-      previousResponseId,
       config.codexStreamJson ? pushProgress : null,
+      previousThreadId,
     );
 
-    state.conversations[message.author.id] = {
-      previousResponseId: result.responseId,
-      updatedAt: new Date().toISOString(),
-    };
-    saveState(state);
+    await updateState((latestState) => {
+      latestState.conversations[message.author.id] = createCodexConversation(
+        result.responseId,
+        currentDay,
+      );
+      return latestState;
+    });
 
     await pendingProgress;
     return result.text;
@@ -464,8 +468,14 @@ async function buildReply(message) {
 
   if (hasOpenAiBackend()) {
     const state = loadState();
-    const previousResponseId =
-      state.conversations?.[message.author.id]?.previousResponseId || null;
+    const currentDay = getLocalDayKey();
+    const existingConversation = getReusableConversation(
+      state,
+      message.author.id,
+      "openai",
+      currentDay,
+    );
+    const previousResponseId = existingConversation?.previousResponseId || null;
 
     const result = await createOpenAiReply({
       config,
@@ -473,11 +483,13 @@ async function buildReply(message) {
       previousResponseId,
     });
 
-    state.conversations[message.author.id] = {
-      previousResponseId: result.responseId,
-      updatedAt: new Date().toISOString(),
-    };
-    saveState(state);
+    await updateState((latestState) => {
+      latestState.conversations[message.author.id] = createOpenAiConversation(
+        result.responseId,
+        currentDay,
+      );
+      return latestState;
+    });
 
     return result.text;
   }
@@ -569,8 +581,10 @@ async function runSocialDeskNotifications() {
       }
     }
 
-    state.socialDeskNotifications = nextState;
-    saveState(state);
+    await updateState((latestState) => {
+      latestState.socialDeskNotifications = nextState;
+      return latestState;
+    });
   } catch (error) {
     const detail = error instanceof Error ? error.message : String(error);
     appendLog({
@@ -626,9 +640,9 @@ function startSocialDeskNotifications() {
     return;
   }
 
-  runSocialDeskNotifications().catch(() => {});
+  runSocialDeskNotifications().catch(() => { });
   socialDeskNotificationTimer = setInterval(() => {
-    runSocialDeskNotifications().catch(() => {});
+    runSocialDeskNotifications().catch(() => { });
   }, config.socialDeskNotifyIntervalMs);
 }
 
@@ -637,9 +651,9 @@ function startProgressNotifications() {
     return;
   }
 
-  runProgressNotifications().catch(() => {});
+  runProgressNotifications().catch(() => { });
   progressNotificationTimer = setInterval(() => {
-    runProgressNotifications().catch(() => {});
+    runProgressNotifications().catch(() => { });
   }, config.progressNotifyIntervalMs);
 }
 
@@ -754,7 +768,7 @@ async function onGatewayPayload(payload) {
     botUserId = payload.d.user?.id || null;
     console.log(
       `Discord bridge ready as ${payload.d.user?.username || "unknown"} ` +
-        `using ${describeEnvSource(config.envPath)}`,
+      `using ${describeEnvSource(config.envPath)}`,
     );
     return;
   }

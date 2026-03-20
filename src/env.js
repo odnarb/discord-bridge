@@ -95,7 +95,6 @@ export function loadConfig(projectRoot) {
     codexBin: merged.CODEX_BIN || "codex",
     codexCwd: merged.CODEX_CWD || path.resolve(projectRoot, ".."),
     codexModel: merged.CODEX_MODEL || DEFAULT_CODEX_MODEL,
-    codexTimeoutMs: Number(merged.CODEX_TIMEOUT_MS || 0),
     codexStreamJson: parseBoolean(merged.CODEX_STREAM_JSON, true),
     codexReasoningEffort: merged.CODEX_REASONING_EFFORT || "low",
     codexNetworkAccessEnabled: parseBoolean(

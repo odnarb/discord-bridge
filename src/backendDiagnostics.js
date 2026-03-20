@@ -36,7 +36,7 @@ export function buildBackendStatusLines(config) {
     `Codex model: ${config.codexModel}`,
     `Codex network access: ${config.codexNetworkAccessEnabled ? "enabled" : "disabled"}`,
     `Codex SDK source: ${config.codexSdkModulePath ? "custom module path" : "package import"}`,
-    `Timeout ms: ${config.codexTimeoutMs || 0}`,
+    "Conversation memory: persisted per user and reused until the local day rolls over",
   ];
 }
 

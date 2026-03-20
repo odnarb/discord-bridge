@@ -12,7 +12,6 @@ function makeConfig(overrides = {}) {
     codexModel: "gpt-5.4",
     codexNetworkAccessEnabled: true,
     codexSdkModulePath: "",
-    codexTimeoutMs: 180000,
     codexUseOpenAiApiKey: false,
     openAiApiKey: "",
     ...overrides,
@@ -44,6 +43,11 @@ test("buildBackendStatusLines includes effective auth source", () => {
   );
 
   assert.ok(lines.includes("Codex auth source: OPENAI_API_KEY"));
+  assert.ok(
+    lines.includes(
+      "Conversation memory: persisted per user and reused until the local day rolls over",
+    ),
+  );
 });
 
 test("formatBackendError explains quota failures for Codex using OPENAI_API_KEY", () => {
