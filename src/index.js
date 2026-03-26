@@ -10,6 +10,8 @@ import {
   getReusableConversation,
   normalizeState,
 } from "./conversationState.js";
+import { formatProgressBody } from "./discordProgress.js";
+import { buildCodexInputItems } from "./codexPrompt.js";
 import { loadConfig } from "./env.js";
 import { createOpenAiReply, hasOpenAi } from "./openai.js";
 import { collectProgressNotifications } from "./progressNotify.js";
@@ -122,6 +124,15 @@ function clip(text, maxLength = 220) {
     return value;
   }
   return `${value.slice(0, maxLength - 3)}...`;
+}
+
+function logProgressFailure(action, error) {
+  appendLog({
+    ts: new Date().toISOString(),
+    direction: "progress_error",
+    action,
+    error: error?.message || String(error),
+  });
 }
 
 function describeEnvSource(envPath) {
@@ -308,15 +319,11 @@ async function createCodexReply(messageText, progress = null, existingThreadId =
       return;
     }
 
-    const body = [
-      reasoningText ? `Reasoning:\n\`\`\`text\n${clip(reasoningText, 1200)}\n\`\`\`` : null,
-      outputText ? `Draft reply:\n\`\`\`text\n${clip(outputText, 1200)}\n\`\`\`` : null,
-      streamLines.length > 0
-        ? ["Recent events:", "```text", ...streamLines.slice(-6), "```"].join("\n")
-        : null,
-    ]
-      .filter(Boolean)
-      .join("\n\n");
+    const body = formatProgressBody({
+      reasoningText,
+      outputText,
+      streamLines,
+    });
 
     if (body && body !== lastProgressText) {
       lastProgressText = body;
@@ -348,10 +355,12 @@ async function createCodexReply(messageText, progress = null, existingThreadId =
       : client.startThread(threadOptions);
 
     const { events } = await thread.runStreamed(
-      [
-        { type: "text", text: config.openAiSystemPrompt },
-        { type: "text", text: messageText },
-      ],
+      buildCodexInputItems(
+        config.openAiSystemPrompt,
+        messageText,
+        !existingThreadId,
+        config.topLevelRoot,
+      ),
     );
 
     for await (const event of events) {
@@ -426,14 +435,22 @@ async function buildReply(message) {
     let pendingProgress = Promise.resolve();
 
     const pushProgress = async (text) => {
-      pendingProgress = pendingProgress.then(async () => {
-        if (!progressMessageId) {
-          const created = await sendDiscordMessage(message.channel_id, text);
-          progressMessageId = created?.id || null;
-          return;
-        }
-        await editDiscordMessage(message.channel_id, progressMessageId, text);
-      });
+      pendingProgress = pendingProgress
+        .catch((error) => {
+          logProgressFailure("queue", error);
+        })
+        .then(async () => {
+          try {
+            if (!progressMessageId) {
+              const created = await sendDiscordMessage(message.channel_id, text);
+              progressMessageId = created?.id || null;
+              return;
+            }
+            await editDiscordMessage(message.channel_id, progressMessageId, text);
+          } catch (error) {
+            logProgressFailure(progressMessageId ? "edit" : "send", error);
+          }
+        });
 
       return pendingProgress;
     };
@@ -462,7 +479,9 @@ async function buildReply(message) {
       return latestState;
     });
 
-    await pendingProgress;
+    await pendingProgress.catch((error) => {
+      logProgressFailure("drain", error);
+    });
     return result.text;
   }
 

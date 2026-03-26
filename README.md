@@ -93,6 +93,8 @@ Optional:
   Comma-separated levels to DM. Defaults to `milestone,blocker,complete`.
 - `DISCORD_PROGRESS_EVENTS_PATH`
   Optional override for the watched progress JSONL file.
+- `TOP_LEVEL_ROOT`
+  Absolute path to the top-level workspace root. Defaults to the parent directory of the repo and is used when instructing new Codex threads to read `AGENTS.md`.
 - `CODEX_BIN`
 - `CODEX_CWD`
 - `CODEX_MODEL`

@@ -60,6 +60,7 @@ test("loadConfig loads required Discord values", () => {
   assert.equal(config.discordApplicationId, "app");
   assert.deepEqual(config.allowedUserIds, ["12345"]);
   assert.equal(config.codexUseOpenAiApiKey, false);
+  assert.equal(config.topLevelRoot, path.dirname(tmpRoot));
 });
 
 test("loadConfig only opts Codex into OPENAI_API_KEY when explicitly enabled", () => {
@@ -79,4 +80,21 @@ test("loadConfig only opts Codex into OPENAI_API_KEY when explicitly enabled", (
 
   assert.equal(config.openAiApiKey, "test-key");
   assert.equal(config.codexUseOpenAiApiKey, true);
+});
+
+test("loadConfig accepts explicit TOP_LEVEL_ROOT", () => {
+  const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), "discord-bridge-"));
+  fs.writeFileSync(
+    path.join(tmpRoot, ".env"),
+    [
+      "DISCORD_BOT_TOKEN=token",
+      "DISCORD_APPLICATION_ID=app",
+      "DISCORD_ALLOWED_USER_IDS=12345",
+      "TOP_LEVEL_ROOT=/srv/ops",
+    ].join("\n"),
+  );
+
+  const config = withIsolatedEnv(() => loadConfig(tmpRoot));
+
+  assert.equal(config.topLevelRoot, "/srv/ops");
 });

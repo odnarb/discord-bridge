@@ -3,7 +3,6 @@ import path from "node:path";
 import { defaultProgressEventsPath } from "./progressEvents.js";
 
 const DEFAULT_MODEL = "gpt-5.4";
-const DEFAULT_CODEX_MODEL = "gpt-5.4";
 
 export function parseEnvFile(raw) {
   const result = {};
@@ -93,8 +92,9 @@ export function loadConfig(projectRoot) {
     allowedUserIds,
     replyBackend: merged.DISCORD_REPLY_BACKEND || "codex",
     codexBin: merged.CODEX_BIN || "codex",
+    topLevelRoot: merged.TOP_LEVEL_ROOT || path.resolve(projectRoot, ".."),
     codexCwd: merged.CODEX_CWD || path.resolve(projectRoot, ".."),
-    codexModel: merged.CODEX_MODEL || DEFAULT_CODEX_MODEL,
+    codexModel: merged.CODEX_MODEL || DEFAULT_MODEL,
     codexStreamJson: parseBoolean(merged.CODEX_STREAM_JSON, true),
     codexReasoningEffort: merged.CODEX_REASONING_EFFORT || "low",
     codexNetworkAccessEnabled: parseBoolean(
