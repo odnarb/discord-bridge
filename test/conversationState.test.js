@@ -3,7 +3,6 @@ import assert from "node:assert/strict";
 import {
   createCodexConversation,
   createEmptyState,
-  createOpenAiConversation,
   getLocalDayKey,
   getReusableConversation,
   normalizeState,
@@ -37,7 +36,6 @@ test("getReusableConversation only returns same-kind same-day memory", () => {
   const state = {
     conversations: {
       codex: createCodexConversation("thread-1", "2026-03-19", "2026-03-19T10:00:00.000Z"),
-      openai: createOpenAiConversation("resp-1", "2026-03-19", "2026-03-19T10:00:00.000Z"),
       stale: createCodexConversation("thread-old", "2026-03-18", "2026-03-18T10:00:00.000Z"),
     },
   };
@@ -46,10 +44,6 @@ test("getReusableConversation only returns same-kind same-day memory", () => {
     getReusableConversation(state, "codex", "codex", "2026-03-19")?.threadId,
     "thread-1",
   );
-  assert.equal(
-    getReusableConversation(state, "openai", "openai", "2026-03-19")?.previousResponseId,
-    "resp-1",
-  );
   assert.equal(getReusableConversation(state, "stale", "codex", "2026-03-19"), null);
-  assert.equal(getReusableConversation(state, "codex", "openai", "2026-03-19"), null);
+  assert.equal(getReusableConversation(state, "codex", "other", "2026-03-19"), null);
 });

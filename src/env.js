@@ -90,7 +90,6 @@ export function loadConfig(projectRoot) {
     discordPublicKey: merged.DISCORD_PUBLIC_KEY || "",
     discordChannelId: merged.DISCORD_CHANNEL_ID || "",
     allowedUserIds,
-    replyBackend: merged.DISCORD_REPLY_BACKEND || "codex",
     codexBin: merged.CODEX_BIN || "codex",
     topLevelRoot: merged.TOP_LEVEL_ROOT || path.resolve(projectRoot, ".."),
     codexCwd: merged.CODEX_CWD || path.resolve(projectRoot, ".."),
@@ -101,15 +100,9 @@ export function loadConfig(projectRoot) {
       merged.CODEX_NETWORK_ACCESS_ENABLED,
       true,
     ),
-    codexUseOpenAiApiKey: parseBoolean(
-      merged.CODEX_USE_OPENAI_API_KEY,
-      false,
-    ),
     codexSdkModulePath: merged.CODEX_SDK_MODULE_PATH || "",
-    openAiApiKey: merged.OPENAI_API_KEY || "",
-    openAiModel: merged.OPENAI_MODEL || DEFAULT_MODEL,
-    openAiSystemPrompt:
-      merged.OPENAI_SYSTEM_PROMPT ||
+    codexSystemPrompt:
+      merged.CODEX_SYSTEM_PROMPT ||
       [
         "You are Forge, a private AI operations assistant.",
         "Be direct, pragmatic, and concise.",

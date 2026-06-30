@@ -40,16 +40,3 @@ export function createCodexConversation(threadId, dayKey, updatedAt = new Date()
     updatedAt,
   };
 }
-
-export function createOpenAiConversation(
-  responseId,
-  dayKey,
-  updatedAt = new Date().toISOString(),
-) {
-  return {
-    kind: "openai",
-    previousResponseId: responseId || null,
-    dayKey,
-    updatedAt,
-  };
-}

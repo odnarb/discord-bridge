@@ -21,12 +21,12 @@ test("parseEnvFile parses key value pairs", () => {
 # comment
 DISCORD_BOT_TOKEN=abc123
 DISCORD_ALLOWED_USER_IDS=1, 2 ,3
-OPENAI_MODEL="gpt-5"
+CODEX_MODEL="gpt-5"
 `);
 
   assert.equal(parsed.DISCORD_BOT_TOKEN, "abc123");
   assert.equal(parsed.DISCORD_ALLOWED_USER_IDS, "1, 2 ,3");
-  assert.equal(parsed.OPENAI_MODEL, "gpt-5");
+  assert.equal(parsed.CODEX_MODEL, "gpt-5");
 });
 
 test("splitCsv trims empty values", () => {
@@ -59,11 +59,11 @@ test("loadConfig loads required Discord values", () => {
   assert.equal(config.discordBotToken, "token");
   assert.equal(config.discordApplicationId, "app");
   assert.deepEqual(config.allowedUserIds, ["12345"]);
-  assert.equal(config.codexUseOpenAiApiKey, false);
+  assert.equal(config.codexModel, "gpt-5.4");
   assert.equal(config.topLevelRoot, path.dirname(tmpRoot));
 });
 
-test("loadConfig only opts Codex into OPENAI_API_KEY when explicitly enabled", () => {
+test("loadConfig accepts a Codex system prompt", () => {
   const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), "discord-bridge-"));
   fs.writeFileSync(
     path.join(tmpRoot, ".env"),
@@ -71,15 +71,13 @@ test("loadConfig only opts Codex into OPENAI_API_KEY when explicitly enabled", (
       "DISCORD_BOT_TOKEN=token",
       "DISCORD_APPLICATION_ID=app",
       "DISCORD_ALLOWED_USER_IDS=12345",
-      "OPENAI_API_KEY=test-key",
-      "CODEX_USE_OPENAI_API_KEY=true",
+      "CODEX_SYSTEM_PROMPT=Keep it practical.",
     ].join("\n"),
   );
 
   const config = withIsolatedEnv(() => loadConfig(tmpRoot));
 
-  assert.equal(config.openAiApiKey, "test-key");
-  assert.equal(config.codexUseOpenAiApiKey, true);
+  assert.equal(config.codexSystemPrompt, "Keep it practical.");
 });
 
 test("loadConfig accepts explicit TOP_LEVEL_ROOT", () => {

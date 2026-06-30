@@ -17,21 +17,14 @@ function isQuotaError(detail) {
 }
 
 export function describeCodexAuthSource(config) {
-  if (config.replyBackend !== "codex") {
-    return "not using Codex";
-  }
-
-  if (config.codexUseOpenAiApiKey && config.openAiApiKey) {
-    return "OPENAI_API_KEY";
-  }
-
-  return "local Codex auth/session";
+  return config.codexBin
+    ? `Codex-managed local/session auth via ${config.codexBin}`
+    : "Codex-managed local/session auth";
 }
 
 export function buildBackendStatusLines(config) {
   return [
-    `Reply backend: ${config.replyBackend}`,
-    `OpenAI API key configured: ${config.openAiApiKey ? "yes" : "no"}`,
+    "Reply path: Codex SDK",
     `Codex auth source: ${describeCodexAuthSource(config)}`,
     `Codex model: ${config.codexModel}`,
     `Codex network access: ${config.codexNetworkAccessEnabled ? "enabled" : "disabled"}`,
@@ -43,24 +36,10 @@ export function buildBackendStatusLines(config) {
 export function formatBackendError(config, error) {
   const detail = normalizeErrorDetail(error);
 
-  if (config.replyBackend === "codex" && isQuotaError(detail)) {
-    if (config.codexUseOpenAiApiKey && config.openAiApiKey) {
-      return [
-        detail,
-        "Codex is configured to authenticate with OPENAI_API_KEY, so this quota error is likely coming from OpenAI API billing/project limits rather than local Codex session allowance.",
-      ].join(" ");
-    }
-
+  if (isQuotaError(detail)) {
     return [
       detail,
-      "Codex is using local/session auth here, so this quota error is coming from the Codex-side account/session rather than the direct OpenAI API reply backend.",
-    ].join(" ");
-  }
-
-  if (config.replyBackend === "openai" && isQuotaError(detail)) {
-    return [
-      detail,
-      "The bridge is using the direct OpenAI API reply backend, so this quota error is coming from the configured OPENAI_API_KEY project or billing limits.",
+      "The bridge is using the Codex SDK path, so this quota error is coming from the active Codex credentials/session rather than a direct OpenAI Responses API client in the bridge.",
     ].join(" ");
   }
 

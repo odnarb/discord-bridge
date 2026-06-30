@@ -5,7 +5,6 @@ import { buildBackendStatusLines, formatBackendError } from "./backendDiagnostic
 import {
   createCodexConversation,
   createEmptyState,
-  createOpenAiConversation,
   getLocalDayKey,
   getReusableConversation,
   normalizeState,
@@ -13,7 +12,6 @@ import {
 import { formatProgressBody } from "./discordProgress.js";
 import { buildCodexInputItems } from "./codexPrompt.js";
 import { loadConfig } from "./env.js";
-import { createOpenAiReply, hasOpenAi } from "./openai.js";
 import { collectProgressNotifications } from "./progressNotify.js";
 import { handleSocialDeskCommand } from "./socialDesk.js";
 import { collectSocialDeskNotifications } from "./socialDeskNotify.js";
@@ -143,10 +141,6 @@ function describeEnvSource(envPath) {
   return path.relative(projectRoot, envPath) || path.basename(envPath);
 }
 
-function describeCodexSdkSource() {
-  return config.codexSdkModulePath ? "custom module path" : "package import";
-}
-
 async function getCodexClient() {
   if (!codexClientPromise) {
     const modulePromise = config.codexSdkModulePath
@@ -169,10 +163,6 @@ async function getCodexClient() {
         const options = {
           codexPathOverride: config.codexBin,
         };
-
-        if (config.codexUseOpenAiApiKey && config.openAiApiKey) {
-          options.apiKey = config.openAiApiKey;
-        }
 
         return new Codex(options);
       });
@@ -296,14 +286,6 @@ function isAllowedUser(authorId) {
   return config.allowedUserIds.includes(String(authorId));
 }
 
-function hasCodexBackend() {
-  return config.replyBackend === "codex";
-}
-
-function hasOpenAiBackend() {
-  return config.replyBackend === "openai" && hasOpenAi(config);
-}
-
 async function createCodexReply(messageText, progress = null, existingThreadId = null) {
   const client = await getCodexClient();
   const streamLines = [];
@@ -356,7 +338,7 @@ async function createCodexReply(messageText, progress = null, existingThreadId =
 
     const { events } = await thread.runStreamed(
       buildCodexInputItems(
-        config.openAiSystemPrompt,
+        config.codexSystemPrompt,
         messageText,
         !existingThreadId,
         config.topLevelRoot,
@@ -430,94 +412,58 @@ async function buildReply(message) {
     return socialDeskReply;
   }
 
-  if (hasCodexBackend()) {
-    let progressMessageId = null;
-    let pendingProgress = Promise.resolve();
+  let progressMessageId = null;
+  let pendingProgress = Promise.resolve();
 
-    const pushProgress = async (text) => {
-      pendingProgress = pendingProgress
-        .catch((error) => {
-          logProgressFailure("queue", error);
-        })
-        .then(async () => {
-          try {
-            if (!progressMessageId) {
-              const created = await sendDiscordMessage(message.channel_id, text);
-              progressMessageId = created?.id || null;
-              return;
-            }
-            await editDiscordMessage(message.channel_id, progressMessageId, text);
-          } catch (error) {
-            logProgressFailure(progressMessageId ? "edit" : "send", error);
+  const pushProgress = async (text) => {
+    pendingProgress = pendingProgress
+      .catch((error) => {
+        logProgressFailure("queue", error);
+      })
+      .then(async () => {
+        try {
+          if (!progressMessageId) {
+            const created = await sendDiscordMessage(message.channel_id, text);
+            progressMessageId = created?.id || null;
+            return;
           }
-        });
+          await editDiscordMessage(message.channel_id, progressMessageId, text);
+        } catch (error) {
+          logProgressFailure(progressMessageId ? "edit" : "send", error);
+        }
+      });
 
-      return pendingProgress;
-    };
+    return pendingProgress;
+  };
 
-    const state = loadState();
-    const currentDay = getLocalDayKey();
-    const existingConversation = getReusableConversation(
-      state,
-      message.author.id,
-      "codex",
+  const state = loadState();
+  const currentDay = getLocalDayKey();
+  const existingConversation = getReusableConversation(
+    state,
+    message.author.id,
+    "codex",
+    currentDay,
+  );
+  const previousThreadId = existingConversation?.threadId || null;
+
+  const result = await createCodexReply(
+    content,
+    config.codexStreamJson ? pushProgress : null,
+    previousThreadId,
+  );
+
+  await updateState((latestState) => {
+    latestState.conversations[message.author.id] = createCodexConversation(
+      result.responseId,
       currentDay,
     );
-    const previousThreadId = existingConversation?.threadId || null;
+    return latestState;
+  });
 
-    const result = await createCodexReply(
-      content,
-      config.codexStreamJson ? pushProgress : null,
-      previousThreadId,
-    );
-
-    await updateState((latestState) => {
-      latestState.conversations[message.author.id] = createCodexConversation(
-        result.responseId,
-        currentDay,
-      );
-      return latestState;
-    });
-
-    await pendingProgress.catch((error) => {
-      logProgressFailure("drain", error);
-    });
-    return result.text;
-  }
-
-  if (hasOpenAiBackend()) {
-    const state = loadState();
-    const currentDay = getLocalDayKey();
-    const existingConversation = getReusableConversation(
-      state,
-      message.author.id,
-      "openai",
-      currentDay,
-    );
-    const previousResponseId = existingConversation?.previousResponseId || null;
-
-    const result = await createOpenAiReply({
-      config,
-      messageText: content,
-      previousResponseId,
-    });
-
-    await updateState((latestState) => {
-      latestState.conversations[message.author.id] = createOpenAiConversation(
-        result.responseId,
-        currentDay,
-      );
-      return latestState;
-    });
-
-    return result.text;
-  }
-
-  return [
-    "Discord bridge is live.",
-    "No AI backend is configured yet.",
-    "Set DISCORD_REPLY_BACKEND to codex or configure OPENAI_API_KEY for openai replies.",
-  ].join("\n");
+  await pendingProgress.catch((error) => {
+    logProgressFailure("drain", error);
+  });
+  return result.text;
 }
 
 async function handleIncomingMessage(message) {
@@ -851,10 +797,8 @@ appendLog({
   event: "startup",
   envSource: describeEnvSource(config.envPath),
   allowedUsers: config.allowedUserIds.length,
-  replyBackend: config.replyBackend,
-  codexUseOpenAiApiKey: config.codexUseOpenAiApiKey,
+  replyPath: "codex-sdk",
   codexNetworkAccessEnabled: config.codexNetworkAccessEnabled,
-  openAiConfigured: hasOpenAi(config),
   progressNotifyEnabled: config.progressNotifyEnabled,
   progressNotifyLevels: config.progressNotifyLevels,
 });
